@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import axios from "axios";
+import api from "@/lib/axios";
 import { useRouter } from "next/navigation";
 
 interface User {
@@ -31,7 +31,6 @@ export default function Register() {
   });
 
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -40,13 +39,19 @@ export default function Register() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setSuccess("");
 
     try {
-    const res = await axios.post<RegisterResponse>("/autenticacion/registro", form);
-        setSuccess(res.data.message); // ahora TypeScript sabe que existe 'message'
+      const res = await api.post<RegisterResponse>(
+        "/autenticacion/registro",
+        form
+      );
+      console.log(res.data.message);
+      // 👇 Redirige a la página de confirmación
+      router.push(`/auth/confirm-email?email=${form.email}`);
     } catch (err: any) {
-        setError(err.response?.data?.message || "Error al registrar el usuario");
+      setError(
+        err.response?.data?.message || "Error al registrar el usuario"
+      );
     }
   };
 
@@ -56,7 +61,6 @@ export default function Register() {
         <h1 className="text-3xl font-extrabold mb-6 text-text">Crear Cuenta</h1>
 
         {error && <p className="text-red-600 mb-4">{error}</p>}
-        {success && <p className="text-green-600 mb-4">{success}</p>}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
@@ -107,16 +111,6 @@ export default function Register() {
             Registrarse
           </button>
         </form>
-
-        <div className="mt-6 text-center text-sm text-neutral">
-          ¿Ya tienes cuenta?{" "}
-          <button
-            onClick={() => router.push("/auth/login")}
-            className="text-secondary hover:text-secondary-light font-semibold"
-          >
-            Inicia sesión
-          </button>
-        </div>
       </div>
     </div>
   );
