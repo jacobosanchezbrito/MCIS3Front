@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import api from "@/lib/axios"; // usamos la instancia con baseURL
+import api from "@/lib/api"; // usamos la instancia con baseURL
 // ↑ recuerda que en src/lib/axios.ts está centralizada la configuración
 
 type User = {
