@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import api from "@/lib/axios";
+import api from "@/lib/api";
 
 export default function ConfirmEmailPage() {
   const router = useRouter();
