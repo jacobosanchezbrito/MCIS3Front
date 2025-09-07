@@ -21,7 +21,7 @@ export default function Login() {
     if (user.rol === "admin") {
       router.replace("/admin");          // admin -> panel
     } else {
-      router.replace("/");               // cliente -> home
+      router.replace("/user");               // cliente -> home
     }
   }, [user, loading, router]);
 
