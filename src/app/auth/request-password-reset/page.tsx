@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import axios from "axios";
+import api from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function RequestPasswordReset() {
   const [email, setEmail] = useState("");
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-
+  const router = useRouter(); 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccess("");
     setError("");
     try {
-      const res = await axios.post<{ message: string }>("/autenticacion/request-password-reset", { email });
+      const res = await api.post<{ message: string }>("/autenticacion/request-password-reset", { email });
       setSuccess(res.data.message);
+      router.replace("/auth/reset-password"); 
     } catch (err: any) {
       setError(err.response?.data?.message || "Error al enviar solicitud de recuperación");
     }

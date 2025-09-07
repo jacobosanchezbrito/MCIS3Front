@@ -26,6 +26,29 @@ export default function ProductsPage() {
   });
   const [nuevoArchivo, setNuevoArchivo] = useState<File | null>(null);
 
+  // Ajuste de stock (debajo de la tabla)
+const [ajusteId, setAjusteId] = useState<number | ''>('');
+const [ajusteCantidad, setAjusteCantidad] = useState<number>(0);
+const [ajustando, setAjustando] = useState(false);
+
+
+// --- Críticos ---
+const [criticos, setCriticos] = useState<any[]>([]);
+const [loadingCriticos, setLoadingCriticos] = useState(false);
+const [errCriticos, setErrCriticos] = useState<string | null>(null);
+
+// --- Logs / Movimientos ---
+const [logs, setLogs] = useState<any[]>([]);
+const [loadingLogs, setLoadingLogs] = useState(false);
+const [errLogs, setErrLogs] = useState<string | null>(null);
+const [logFilter, setLogFilter] = useState<{ inicio: string; fin: string; productoId: number | '' }>({
+  inicio: '',
+  fin: '',
+  productoId: '',
+});
+
+
+
   // Editar (panel simple en la misma página)
   const [editId, setEditId] = useState<number | null>(null);
   const [editData, setEditData] = useState<any | null>(null);
@@ -185,6 +208,87 @@ export default function ProductsPage() {
       alert(e?.response?.data?.message || 'Error subiendo imagen');
     }
   }
+
+  // Cargar productos críticos
+async function cargarCriticos() {
+  try {
+    setLoadingCriticos(true);
+    setErrCriticos(null);
+    const { data } = await api.get<any[]>('/productos/criticos');
+    setCriticos(Array.isArray(data) ? data : []);
+  } catch (e: any) {
+    setErrCriticos(e?.response?.data?.message || 'No se pudieron obtener los críticos');
+    setCriticos([]);
+  } finally {
+    setLoadingCriticos(false);
+  }
+}
+
+// Buscar logs por rango (y opcionalmente por producto)
+async function buscarLogsPorRango(e: React.FormEvent) {
+  e.preventDefault();
+  if (!logFilter.inicio || !logFilter.fin) {
+    alert('Selecciona fecha inicio y fin');
+    return;
+  }
+  try {
+    setLoadingLogs(true);
+    setErrLogs(null);
+    const dto: any = {
+      fechaInicio: `${logFilter.inicio}T00:00:00.000Z`,
+      fechaFin: `${logFilter.fin}T23:59:59.999Z`,
+    };
+    if (logFilter.productoId) dto.productoId = Number(logFilter.productoId);
+
+    const { data } = await api.post<any[]>('/productos/logs/rango', dto);
+    setLogs(Array.isArray(data) ? data : []);
+  } catch (e: any) {
+    setErrLogs(e?.response?.data?.message || 'No se pudieron obtener los movimientos');
+    setLogs([]);
+  } finally {
+    setLoadingLogs(false);
+  }
+}
+
+
+    async function onAjustarStock(e: React.FormEvent) {
+  e.preventDefault();
+
+  const id = typeof ajusteId === 'number' ? ajusteId : Number(ajusteId);
+  const qty = Number(ajusteCantidad);
+
+  if (!id || !Number.isFinite(qty) || qty === 0) {
+    alert('Selecciona un producto y una cantidad distinta de 0');
+    return;
+  }
+
+  try {
+    setAjustando(true);
+
+    // 1) Ajusta stock (genera logs en el back)
+    await api.patch(`/productos/${id}/stock`, { cantidad: qty });
+
+    // 2) Relee el producto actualizado (evita filas "vacías")
+    const { data: refreshed } = await api.get<any>(`/productos/${id}`);
+
+    if (refreshed && refreshed.id != null) {
+      setItems((arr) => arr.map((p) => (p.id === refreshed.id ? refreshed : p)));
+    } else {
+      // Fallback por si algo raro pasa: fuerza un reload completo
+      await load();
+    }
+
+    // 3) Limpia el formulario de ajuste
+    setAjusteId('');
+    setAjusteCantidad(0);
+  } catch (e: any) {
+    alert(e?.response?.data?.message || 'No se pudo ajustar el stock');
+  } finally {
+    setAjustando(false);
+  }
+}
+
+
 
   const empty = !loading && !err && items.length === 0;
 
@@ -428,6 +532,285 @@ export default function ProductsPage() {
               </form>
             </div>
           )}
+
+<div className="rounded-lg border bg-white p-5 text-black">
+  <h2 className="mb-4 text-lg font-semibold">Ajuste de stock</h2>
+
+  {/* Producto seleccionado (para mostrar imagen y datos) */}
+  {(() => {
+    const sel = typeof ajusteId === 'number' ? items.find((x) => x.id === ajusteId) : null;
+    return (
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field label="Producto">
+          <select
+            className="input text-black"
+            value={ajusteId}
+            onChange={(e) => setAjusteId(e.target.value ? Number(e.target.value) : '')}
+            required
+          >
+            <option value="">— Selecciona —</option>
+            {items.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Cantidad (usa + para entrada, - para salida)">
+          <input
+            className="input text-black"
+            type="number"
+            step={1}
+            value={ajusteCantidad}
+            onChange={(e) => setAjusteCantidad(Number(e.target.value))}
+            placeholder="Ej: 20 o -5"
+            required
+          />
+        </Field>
+
+        <div className="flex items-end">
+          <button
+            type="submit"
+            onClick={onAjustarStock}
+            disabled={ajustando || !ajusteId || !ajusteCantidad}
+            className="w-full rounded-lg bg-primary px-4 py-2 text-white disabled:opacity-60"
+          >
+            {ajustando ? 'Aplicando…' : 'Aplicar ajuste'}
+          </button>
+        </div>
+
+        {/* Vista previa del producto seleccionado */}
+        <div className="md:col-span-3">
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 overflow-hidden rounded bg-gray-100 flex-shrink-0">
+                {sel?.imagenUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={sel.imagenUrl}
+                    alt={sel.nombre}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+                    —
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{sel?.nombre ?? 'Sin seleccionar'}</div>
+                {sel ? (
+                  <div className="mt-0.5 text-sm">
+                    <span className="mr-2">Stock actual:</span>
+                    <span className="font-semibold">{sel.stock}</span>
+                    {typeof sel.stockMinimo === 'number' && (
+                      <span className="ml-3 text-xs">
+                        (mín.: <span className="font-semibold">{sel.stockMinimo}</span>)
+                      </span>
+                    )}
+                    {sel.categoria && (
+                      <div className="mt-0.5 text-xs">
+                        Categoría: <span className="font-medium">{sel.categoria}</span>
+                        {sel.subcategoria ? ` / ${sel.subcategoria}` : ''}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-0.5 text-sm text-gray-500">
+                    Selecciona un producto para ver su detalle.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  })()}
+</div>
+
+{/* ========================== CRÍTICOS ========================== */}
+<div className="rounded-lg border bg-white p-5 text-black">
+  <div className="mb-3 flex items-center justify-between">
+    <h2 className="text-lg font-semibold">Productos en estado crítico</h2>
+    <button
+      type="button"
+      onClick={cargarCriticos}
+      className="rounded-lg bg-primary px-3 py-2 text-white hover:opacity-90"
+    >
+      {loadingCriticos ? 'Cargando…' : 'Refrescar'}
+    </button>
+  </div>
+
+  {errCriticos && (
+    <div className="mb-3 rounded border border-red-300 bg-red-50 p-3 text-red-800">
+      {errCriticos}
+    </div>
+  )}
+
+  {loadingCriticos ? (
+    <div className="animate-pulse rounded border p-4">Cargando…</div>
+  ) : criticos.length === 0 ? (
+    <div className="rounded border border-dashed p-8 text-center text-gray-600">
+      No hay productos críticos.
+    </div>
+  ) : (
+    <div className="overflow-x-auto rounded border bg-white">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <Th>Imagen</Th>
+            <Th>Nombre</Th>
+            <Th>Categoría</Th>
+            <Th>Stock</Th>
+            <Th>Mínimo</Th>
+            <Th>Estado</Th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {criticos.map((p) => (
+            <tr key={p.id} className="hover:bg-gray-50/60">
+              <td className="p-2">
+                <div className="h-12 w-12 overflow-hidden rounded bg-gray-100">
+                  {p.imagenUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imagenUrl} alt={p.nombre} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">—</div>
+                  )}
+                </div>
+              </td>
+              <Td className="font-medium">{p.nombre}</Td>
+              <Td>
+                {p.categoria}
+                {p.subcategoria ? ` / ${p.subcategoria}` : ''}
+              </Td>
+              <Td>
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-sm text-red-700">{p.stock}</span>
+              </Td>
+              <Td>{p.stockMinimo ?? 0}</Td>
+              <Td><span className={badgeForEstado(p.estado)}>{p.estado ?? '—'}</span></Td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
+
+{/* ========================== MOVIMIENTOS (LOGS) ========================== */}
+<div className="rounded-lg border bg-white p-5 text-black">
+  <h2 className="mb-4 text-lg font-semibold">Movimientos de stock</h2>
+
+  {/* Filtros */}
+  <form onSubmit={buscarLogsPorRango} className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+    <Field label="Fecha inicio">
+      <input
+        className="input text-black"
+        type="date"
+        value={logFilter.inicio}
+        onChange={(e) => setLogFilter((f) => ({ ...f, inicio: e.target.value }))}
+        required
+      />
+    </Field>
+
+    <Field label="Fecha fin">
+      <input
+        className="input text-black"
+        type="date"
+        value={logFilter.fin}
+        onChange={(e) => setLogFilter((f) => ({ ...f, fin: e.target.value }))}
+        required
+      />
+    </Field>
+
+    <Field label="Producto (opcional)">
+      <select
+        className="input text-black"
+        value={logFilter.productoId}
+        onChange={(e) =>
+          setLogFilter((f) => ({ ...f, productoId: e.target.value ? Number(e.target.value) : '' }))
+        }
+      >
+        <option value="">Todos</option>
+        {items.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.nombre}
+          </option>
+        ))}
+      </select>
+    </Field>
+
+    <div className="flex items-end">
+      <button type="submit" className="w-full rounded-lg bg-primary px-4 py-2 text-white hover:opacity-90">
+        {loadingLogs ? 'Buscando…' : 'Buscar'}
+      </button>
+    </div>
+  </form>
+
+  {errLogs && (
+    <div className="mb-3 rounded border border-red-300 bg-red-50 p-3 text-red-800">
+      {errLogs}
+    </div>
+  )}
+
+  {/* Tabla de logs */}
+  {loadingLogs ? (
+    <div className="animate-pulse rounded border p-4">Cargando…</div>
+  ) : logs.length === 0 ? (
+    <div className="rounded border border-dashed p-8 text-center text-gray-600">
+      No hay movimientos para el criterio seleccionado.
+    </div>
+  ) : (
+    <div className="overflow-x-auto rounded border bg-white">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <Th>Fecha</Th>
+            <Th>Producto</Th>
+            <Th>Tipo</Th>
+            <Th>Cantidad</Th>
+            <Th>Usuario</Th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {logs.map((l) => {
+            const prod = items.find((p) => p.id === (l.productoId ?? l.producto?.id));
+            const nombre = prod?.nombre ?? l.producto?.nombre ?? '—';
+            const tipo = l.tipo ?? l.Tipo ?? '—';
+            const cantidad = Number(l.cantidad ?? 0);
+            const fecha = l.fecha ? new Date(l.fecha) : null;
+            const fechaStr = fecha ? fecha.toLocaleString('es-CO') : '—';
+            const usuario = l.usuarioId ?? l.usuario?.id ?? '—';
+            return (
+              <tr key={l.id ?? `${(l.productoId ?? 'x')}-${(l.fecha ?? Math.random())}`}>
+                <Td>{fechaStr}</Td>
+                <Td className="font-medium">{nombre}</Td>
+                <Td>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                      tipo === 'ENTRADA'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {tipo}
+                  </span>
+                </Td>
+                <Td className={cantidad >= 0 ? 'text-emerald-700' : 'text-amber-800'}>
+                  {cantidad >= 0 ? `+${cantidad}` : `${cantidad}`}
+                </Td>
+                <Td>{usuario}</Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
+
 
           {/* Editar (panel simple) */}
           {editId && editData && (

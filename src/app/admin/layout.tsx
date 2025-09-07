@@ -6,22 +6,21 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();  // 👈 ahora también logout
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (loading) return;                 // espera a que cargue el perfil
+    if (loading) return;                 
     if (!user) {
-      router.replace('/auth/login');     // no hay sesión -> login
+      router.replace('/auth/login');     
       return;
     }
     if (user.rol !== 'admin') {
-      router.replace('/');               // tiene sesión pero no es admin -> home
+      router.replace('/');               
     }
   }, [user, loading, router]);
 
-  // Evita parpadeos mientras se resuelve el estado de auth
   if (loading || !user || user.rol !== 'admin') {
     return (
       <div className="min-h-screen bg-background-light text-neutral">
@@ -42,8 +41,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <Link href="/" className="font-semibold">Mercado Cafetero</Link>
           <nav className="flex items-center gap-2 text-sm">
             <NavItem href="/admin/products" pathname={pathname}>Productos</NavItem>
-            <NavItem href="/admin/users" pathname={pathname}>Usuarios</NavItem>
-            <span className="rounded-full px-3 py-1 opacity-75">(pronto) Configuración</span>
+            {/* 👇 Botón simple para cerrar sesión */}
+            <button
+              onClick={logout}
+              className="rounded-full px-3 py-1 hover:bg-white/10 transition"
+            >
+              Cerrar sesión
+            </button>
           </nav>
         </div>
       </header>
