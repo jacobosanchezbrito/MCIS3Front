@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 
-export default function ConfirmEmailPage() {
+// Componente de confirmación de correo
+function ConfirmEmailForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email"); // 👈 lo recibimos aquí
@@ -58,5 +59,14 @@ export default function ConfirmEmailPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+// Componente que usa Suspense
+export default function ConfirmEmailPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ConfirmEmailForm />
+    </Suspense>
   );
 }
