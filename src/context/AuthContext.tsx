@@ -85,10 +85,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     api.defaults.headers.common["Authorization"] = `Bearer ${jwt}`;
 
     const profileRes = await api.get<User>("/autenticacion/perfil");
+    // si ya hiciste el cambio en el back, viene con { id, rol, ... }
     saveAuth(profileRes.data, jwt);
-
-    if (profileRes.data.rol === "admin") router.push("/admin");
-    else router.push("/");
   };
 
   const logout = () => {

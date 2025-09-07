@@ -1,24 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user, loading } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Redirección centralizada según rol, cuando ya tenemos user
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+
+    if (user.rol === "admin") {
+      router.replace("/admin");          // admin -> panel
+    } else {
+      router.replace("/");               // cliente -> home
+    }
+  }, [user, loading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     try {
-      await login(email, password);
-      router.push("/"); // Redirige al home tras login exitoso
+      setSubmitting(true);
+      await login(email, password);      // guarda user/token en contexto
+      // NO navegues aquí; lo hace el useEffect cuando user cambie
     } catch (err: any) {
-      setError(err.response?.data?.message || "Error al iniciar sesión");
+      setError(err?.response?.data?.message || "Error al iniciar sesión");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -36,6 +53,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-[#B33A3A]"
+            required
           />
           <input
             type="password"
@@ -43,34 +61,41 @@ export default function Login() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full p-3 border border-gray-300 rounded focus:outline-none focus:border-[#B33A3A]"
+            required
           />
-            <div className="mt-6 text-center text-sm text-neutral">
-                ¿Olvidaste tu contraseña?{" "}
-                <button
-                    onClick={() => router.push("/auth/request-password-reset")}
-                    className="text-secondary hover:text-secondary-light font-semibold"
-                >
-                    Recuperar contraseña
-                </button>
-            </div>
+
+          {/* Importante: type='button' para no enviar el form */}
+          <div className="mt-2 text-center text-sm text-neutral">
+            ¿Olvidaste tu contraseña?{" "}
+            <button
+              type="button"
+              onClick={() => router.push("/auth/request-password-reset")}
+              className="text-secondary hover:text-secondary-light font-semibold"
+            >
+              Recuperar contraseña
+            </button>
+          </div>
+
           <button
             type="submit"
-            className="primary py-3 mt-2 shadow-md hover:shadow-lg transition-all"
+            disabled={submitting}
+            className="primary py-3 mt-2 shadow-md hover:shadow-lg transition-all disabled:opacity-60"
           >
-            Ingresar
+            {submitting ? "Ingresando..." : "Ingresar"}
           </button>
         </form>
-        
+
+        {/* Importante: type='button' fuera del form igual es seguro, pero lo dejamos claro */}
         <div className="mt-6 text-center text-sm text-neutral">
           ¿No tienes cuenta?{" "}
           <button
+            type="button"
             onClick={() => router.push("/auth/registro")}
             className="text-secondary hover:text-secondary-light font-semibold"
           >
             Regístrate
           </button>
         </div>
-        
       </div>
     </div>
   );
